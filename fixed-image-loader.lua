@@ -1,4 +1,6 @@
-local Old; Old = hookfunction(syn.request, function(self)
+local Request = syn and syn.request or request
+
+local Old; Old = hookfunction(Request, function(self)
     if self.Url == 'https://imageloader.dirtgui.repl.co/GetImage' then
         self.Url = 'http://75.119.130.100:8080/GetImage'
     end
