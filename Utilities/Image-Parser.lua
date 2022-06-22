@@ -921,7 +921,7 @@ function PNG:GetPixel(t,x, y)
 		alpha = 255
 	end
 	
-	return color, alpha / 255
+	return color, alpha
 end
 
 function PNG.new(buffer)
