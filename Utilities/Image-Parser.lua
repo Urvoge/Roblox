@@ -1043,8 +1043,24 @@ function PNG.new(buffer)
 		end
 	end
 
+	file.Pixels = {}
+
+	for X = 1, file.Width do
+		for Y = 1, file.Height do
+			local Color, Transparency = PNG:GetPixel(file, X, Y)
+
+			if Color and Transparency then
+				if not file.Pixels[X] then
+					file.Pixels[X] = {}
+				end
+
+				file.Pixels[X][Y] = { Color, Transparency }
+			end
+		end
+	end
+
 	function file:GetPixel(X, Y)
-		return PNG:GetPixel(file, X, Y)
+		return file.Pixels[X][Y]
 	end
 	
 	return setmetatable(file, PNG)
