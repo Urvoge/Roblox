@@ -1785,7 +1785,7 @@ do
 		list = list or {}
 		
 		search.Button.MouseButton1Click:Connect(function()
-			if typeof(GetList) == 'function' then
+			if GetList then
 				list = GetList()
 			end
 			
@@ -1797,7 +1797,7 @@ do
 		end)
 		
 		search.TextBox.Focused:Connect(function()
-			if typeof(GetList) == 'function' then
+			if GetList then
 				list = GetList()
 			end
 			
@@ -1813,7 +1813,7 @@ do
 		end)
 		
 		search.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
-			if typeof(GetList) == 'function' then
+			if GetList then
 				list = GetList()
 			end
 
