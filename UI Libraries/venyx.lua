@@ -1686,8 +1686,6 @@ do
 
 		if typeof(list) == 'function' then
 			list = GetList()
-		else
-			list = list
 		end
 
 		local dropdown = utility:Create("Frame", {
@@ -1777,10 +1775,10 @@ do
 		local search = dropdown.Search
 		local focused
 		
-		list = list or {}
+		list = typeof(list) == 'function' and {} or list and list or {}
 		
 		search.Button.MouseButton1Click:Connect(function()
-			if typeof(list) == 'function' then
+			if typeof(GetList) == 'function' then
 				list = GetList()
 			end
 			
@@ -1792,7 +1790,7 @@ do
 		end)
 		
 		search.TextBox.Focused:Connect(function()
-			if typeof(list) == 'function' then
+			if typeof(GetList) == 'function' then
 				list = GetList()
 			end
 			
@@ -1808,7 +1806,7 @@ do
 		end)
 		
 		search.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
-			if typeof(list) == 'function' then
+			if typeof(GetList) == 'function' then
 				list = GetList()
 			end
 
