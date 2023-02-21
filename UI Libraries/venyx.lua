@@ -1690,10 +1690,16 @@ do
 		return slider
 	end
 	
-	function section:addDropdown(title, list, callback)
-		local GetList = (typeof(list) == 'function') and list or nil
+	function section:addDropdown(title, _list, callback)
+		function GetList()
+			if typeof(_list) == 'function' then
+				return _list()
+			else
+				return _list
+			end
+		end
 
-		list = GetList and GetList() or list
+		local list = GetList()
 
 		local dropdown = utility:Create("Frame", {
 			Name = "Dropdown",
@@ -1785,10 +1791,8 @@ do
 		list = list or {}
 		
 		search.Button.MouseButton1Click:Connect(function()
-			if GetList then
-				list = GetList()
-			end
-			
+			GetList()
+
 			if search.Button.Rotation == 0 then
 				self:updateDropdown(dropdown, nil, list, callback)
 			else
@@ -1797,9 +1801,7 @@ do
 		end)
 		
 		search.TextBox.Focused:Connect(function()
-			if GetList then
-				list = GetList()
-			end
+			GetList()
 			
 			if search.Button.Rotation == 0 then
 				self:updateDropdown(dropdown, nil, list, callback)
@@ -1813,9 +1815,7 @@ do
 		end)
 		
 		search.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
-			if GetList then
-				list = GetList()
-			end
+			GetList()
 
 			if focused then
 				local list = utility:Sort(search.TextBox.Text, list)
