@@ -1,3 +1,12 @@
+--[[ Changelog
+
+	02/20/23, 9:12 PM:
+		> Updated addDropdown to support functions as second argument. ( Useful for making a teleport to player, etc. )
+		> Changed size of main frame.
+
+]]
+
+
 -- init
 local player = game.Players.LocalPlayer
 local mouse = player:GetMouse()
@@ -220,7 +229,7 @@ do
 				Name = "Main",
 				BackgroundTransparency = 1,
 				Position = UDim2.new(0.25, 0, 0.052435593, 0),
-				Size = UDim2.new(0, 511, 0, 425),
+				Size = UDim2.new(0, 511, 0, 350),
 				Image = "rbxassetid://4641149554",
 				ImageColor3 = themes.Background,
 				ScaleType = Enum.ScaleType.Slice,
@@ -1682,11 +1691,9 @@ do
 	end
 	
 	function section:addDropdown(title, list, callback)
-		local GetList = list
+		local GetList = (typeof(list) = 'function') and list or nil
 
-		if typeof(list) == 'function' then
-			list = GetList()
-		end
+		list = GetList and GetList() or list
 
 		local dropdown = utility:Create("Frame", {
 			Name = "Dropdown",
@@ -1774,8 +1781,8 @@ do
 		
 		local search = dropdown.Search
 		local focused
-		
-		list = typeof(list) == 'function' and {} or list and list or {}
+
+		list = list or {}
 		
 		search.Button.MouseButton1Click:Connect(function()
 			if typeof(GetList) == 'function' then
