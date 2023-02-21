@@ -1682,9 +1682,13 @@ do
 	end
 	
 	function section:addDropdown(title, list, callback)
-        if typeof(list) == 'function' then
-            list = list()
-        end
+		local GetList = list
+
+		if typeof(list) == 'function' then
+			list = GetList()
+		else
+			list = list
+		end
 
 		local dropdown = utility:Create("Frame", {
 			Name = "Dropdown",
@@ -1776,6 +1780,10 @@ do
 		list = list or {}
 		
 		search.Button.MouseButton1Click:Connect(function()
+			if typeof(list) == 'function' then
+				list = GetList()
+			end
+			
 			if search.Button.Rotation == 0 then
 				self:updateDropdown(dropdown, nil, list, callback)
 			else
@@ -1784,6 +1792,10 @@ do
 		end)
 		
 		search.TextBox.Focused:Connect(function()
+			if typeof(list) == 'function' then
+				list = GetList()
+			end
+			
 			if search.Button.Rotation == 0 then
 				self:updateDropdown(dropdown, nil, list, callback)
 			end
@@ -1796,6 +1808,10 @@ do
 		end)
 		
 		search.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
+			if typeof(list) == 'function' then
+				list = GetList()
+			end
+
 			if focused then
 				local list = utility:Sort(search.TextBox.Text, list)
 				list = #list ~= 0 and list 
