@@ -1691,7 +1691,7 @@ do
 	end
 	
 	function section:addDropdown(title, list, callback)
-		local GetList = (typeof(list) = 'function') and list or nil
+		local GetList = (typeof(list) == 'function') and list or nil
 
 		list = GetList and GetList() or list
 
