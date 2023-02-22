@@ -1,110 +1,119 @@
--->> Client:AddEventListener(Event, Callback, Count <optional>) -> returns Event
--->> Event:Disconnect() -> Disconnects listener
--->>
--->> CharacterAdded     -> Arguments: None
--->> HealthChanged  	-> Arguments: <float> Health
--->> Jumped         	-> Arguments: None
--->> Seated		-> Arguments: <bool> Active, <BasePart> Seat
--->> Died		-> Arguments: None
+--// Urvoge Was Here <3 \\--
+
+
+--[[
+
+	Changelog:
+		02/22/23, 5:18 PM:
+			> Started rewrite
+			
+		02/22/23, 5:26 PM:
+			> Added client events
+			> Added RequestTeleport()
+			
+		02/22/23, 5:51 PM:
+			> Polished code
+			> Fixed bugs
+
+--]]
 
 
 local Client = {}; do
-    local Event = {}
-    Event.__index = Event
-	
-	-- Variables
-	Client.Player = game:GetService("Players").LocalPlayer
-	Client.Character = (Client.Player.Character or Client.Player.CharacterAdded:Wait())
-	
-	Client.WalkSpeed = 16
-	Client.JumpPower = 50
-	
-	Client.Events = {"CharacterAdded", "HealthChanged", "Jumped", "Seated", "Died"}
-	
-	-- Function
+
+	--// Variables
+	local Event = {}; do Event.__index = Event end
+
+	Client.Player = game.Players.LocalPlayer
+	Client.Character = Client.Player.Character or Client.Player.CharacterAdded:Wait()
+
+	Client.WalkSpeed = false
+	Client.JumpPower = false
+
+	Client.Events = { 'CharacterAdded', 'HealthChanged', 'Jumped', 'Seated', 'Died' }
+
+	--// Functions
 	function Client.new(Character)
-		local Humanoid = Character:WaitForChild("Humanoid")
-		
+		local Humanoid = Character:WaitForChild('Humanoid')
+
 		Client.Character = Character
-		
-		Humanoid.WalkSpeed = Client.WalkSpeed
-		Humanoid.JumpPower = Client.JumpPower
-		
-		Humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function() Humanoid.WalkSpeed = Client.WalkSpeed end)
-		Humanoid:GetPropertyChangedSignal("JumpPower"):Connect(function() Humanoid.JumpPower = Client.JumpPower end)
+		Humanoid.WalkSpeed = Client.WalkSpeed and Client.WalkSpeed or Humanoid.WalkSpeed
+		Humanoid.JumpPower = Client.JumpPower and Client.JumpPower or Humanoid.JumpPower
+
+		Humanoid:GetPropertyChangedSignal('WalkSpeed'):Connect(function() if Client.WalkSpeed and Humanoid.WalkSpeed ~= Client.WalkSpeed then Humanoid.WalkSpeed = Client.WalkSpeed end end)
+		Humanoid:GetPropertyChangedSignal('JumpPower'):Connect(function() if Client.JumpPower and Humanoid.JumpPower ~= Client.JumpPower then Humanoid.JumpPower = Client.JumpPower end end)
 	end
 
-	function Client:Teleport(Position)
-		local Root = Client:GetCharacterInstance("HumanoidRootPart")
-		Position = typeof(Position) == "Vector3" and CFrame.new(Position) or Position
+	function Client.RequestTeleport(Position, Callback) --> <Position> CFrame, Vector
+		local RootPart = Client.Character:FindFirstChild('HumanoidRootPart')
+		Callback = Callback or function() end
 
-		assert(Root, "Client.Teleport: Client doesn't have a RootPart")
+		if (RootPart) then
+			RootPart.CFrame = typeof(Position) == 'CFrame' and Position or CFrame.new(Position)
 
-		Root.CFrame = Position
-	end
-
-	function Client:GetCharacterInstance(Object, Player)
-		Player = (Player and game.Players[Player] or Client.Player)
-
-		assert(Player, "Client.GetCharacterInstance: Invalid Player")
-
-		if (Player.Character) then
-			return Player.Character:FindFirstChild(Object)
+			Callback(true)
+			return
 		end
 
-		return nil
+		Callback(false)
 	end
+	
+	
+	
+	function Client.CreateEventListener(EventName, Callback, Count)
+		if not table.find(Client.Events, EventName) then return false, 'Invalid event' end
 
-    function Client:AddEventListener(__Event, Callback, Count)
-		assert(table.find(Client.Events, __Event), "Client.AddEventListener: Invalid Event.")
-		Callback = (Callback or function() return end)
+		Callback = Callback and Callback or function() end
+		Count = Count and Count or math.huge
 
 		local OldCallback = Callback
-		local Meta = {Event = nil, Calls = 0}
+		local Data = { Event = nil, Calls = 0, Connections = { } }
+
+		local Humanoid = Client.Character:FindFirstChild('Humanoid')
 
 		Callback = function(...)
-			Meta.Calls += 1
+			local Arguments = { ... }
 
-			if (Count) and (Meta.Calls >= (Count + 1)) then
-				if (Meta.Event) then Meta.Event:Disconnect() end
+			Data.Calls += 1
 
+			if Data.Event and Data.Calls >= (Count + 1) then
+				Callback = nil
+				
+				if Data.Event then Data.Event:Disconnect() end
+				
+				for _, Connection in next, Data.Connections do
+					Connection:Disconnect()
+				end
+				
 				return
 			end
 			
-			return OldCallback(...)
+			return OldCallback(table.unpack(Arguments))
 		end
 
-		local Character = Client.Character
-		local Humanoid = Character:WaitForChild("Humanoid")
-
-		local function Initiate(Character, IsOld)
-			local Humanoid = Character:WaitForChild("Humanoid")
-
-			if (__Event == "CharacterAdded") and (not IsOld) then
-				Callback()
-			elseif (__Event == "HealthChanged") then
-				Humanoid.HealthChanged:Connect(Callback)
-			elseif (__Event == "Jumped") then
-				Humanoid.Jumping:Connect(function(Active) if (Active) then Callback() end end)
-			elseif (__Event == "Seated") then
-				Humanoid.Seated:Connect(Callback)
-			elseif (__Event == "Died") then
-				Humanoid.Died:Connect(Callback)
+		local function StartTracking(Character, Ignore)
+			if EventName == 'CharacterAdded' and not Ignore then
+				Callback(Character)
+			elseif EventName == 'HealthChanged' then
+				table.insert(Data.Connections, Humanoid.HealthChanged:Connect(Callback))
+			elseif EventName == 'Jumped' then
+				table.insert(Data.Connections, Humanoid.Jumping:Connect(function(Active) if (Active) then Callback() end end))
+			elseif EventName == 'Seated' then
+				table.insert(Data.Connections, Humanoid.Seated:Connect(Callback))
+			elseif EventName == 'Died' then
+				table.insert(Data.Connections, Humanoid.Died:Connect(Callback))
 			end
 		end
 
-		Initiate(Character, true)
-		local CharacterAddedEvent = Client.Player.CharacterAdded:Connect(Initiate)
+		Data.Event = Client.Player.CharacterAdded:Connect(StartTracking)
+		StartTracking(Client.Character, true)
 
-		Meta.Event = CharacterAddedEvent
-		return setmetatable(Meta, Event)
-    end
-
-	function Event:Disconnect()
-		self.Event:Disconnect()
+		return setmetatable(Data, Event)
 	end
 
-	-- Initiation
+	function Event:Disconnect()
+		return self.Event:Disconnect()
+	end
+	
 	Client.new(Client.Character)
 	Client.Player.CharacterAdded:Connect(Client.new)
 
