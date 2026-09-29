@@ -1,16 +1,6 @@
 --!strict
 --[[
-	CornyMenu v5 - a Call of Duty mod-menu style UI for Corny, drawn with Volt's
-	Drawing API and anchored to the top right of the screen. One menu is shared by
-	every Corny script: the first one creates it, the others add their own page,
-	and re-running a script replaces only its own page.
-	v5: a hosted module. This file is what goes on the website; scripts load it with
-	the loader block (lib/cornymenu_loader.lua), which downloads it, keeps the last
-	good copy in the workspace and returns what this file returns. Running this file
-	only defines the library: nothing is drawn or connected before CornyMenu.get().
-	v4: every key is rebindable (two per action, combinations, gamepad buttons), key
-	repeat and mouse behavior are settings, and the header is plain. A menu from an
-	older script is replaced, so re-run older scripts after loading a newer one.
+	v5
 
 	local menu = CornyMenu.get({ title = "Corny", subtitle = "Lumber Tycoon 2" })
 	local page = menu:page("Build")   -- replaces an older page with this name
