@@ -1,87 +1,6 @@
 --!strict
 --[[
-	v5
-
-	local menu = CornyMenu.get({ title = "Corny", subtitle = "Lumber Tycoon 2" })
-	local page = menu:page("Build")   -- replaces an older page with this name
-	page:onDestroy(fn)                -- runs when the page is replaced or the menu unloads
-	page:track(item)                  -- connection / Instance / thread / fn / object with a
-	                                  -- Destroy, cleaned up with the page (at once if it is gone)
-
-	Options (`opts` is optional everywhere: description = text under the menu,
-	enabled = false greys it out, visible = false hides it, color = text tint)
-	  page:header(text)
-	  page:label(text, opts?)                       :set(text, color?)
-	  page:separator()
-	  page:button(text, callback?, opts?)           opts.confirm = true | "text": press twice
-	  page:toggle(text, default?, callback?, opts?)                   callback(on)
-	  page:cycle(text, choices, default?, callback?, opts?)           callback(value, text)
-	      choices = {"A", "B"} or {{text = "Grid 1", value = 1}}
-	  page:slider(text, default, callback?, opts)   opts {min, max, step?, format?}
-	  page:input(text, default?, callback?, opts?)  opts {placeholder?, numeric?, min?, max?,
-	                                                integer?, maxLength?}; numeric -> number
-	  page:keybind(text, default?, callback?, opts?)                  callback(key?)
-	  page:list(text, items, callback?, opts?)      items {{key, text, dim?, description?}}
-	      opts {searchable?, placeholder?, emptyText?, stay?}         callback(key, item)
-	  page:submenu(text, opts?) -> Page
-	  page:canvas(height, painter, opts?)           a row the script draws into (previews...)
-	      opts {animate?, onMouse(event, x, y, delta)?}; painter(draw), see below
-	  page:overlay(painter, opts?) -> Layer          screen-wide drawing outside the menu
-	      :redraw() :setVisible(on) :setAnimated(on) :Destroy()
-	Every option: :get() :set(value) :onChange(callback?) :setText(text)
-	  :setDescription(text?) :setVisible(on) :setEnabled(on) :setColor(color?)
-	  :setBadge(text?) :flash(color?) :Destroy(); cycles :setChoices(choices),
-	  sliders :setRange(min, max, step?), lists :setItems(items) :select(key?),
-	  submenus and lists :open(), canvases :redraw() :setAnimated(on)
-	Pages: :open() :isShowing() :setTitle(text) :setBadge(text?) :clear() :Destroy()
-	  :task() :prompt() :hidePrompt() :status() work like the menu's (below) but go
-	  away with the page, so a re-run script leaves no old cards or key hints behind
-	Setters never fire callbacks. Callbacks run on their own thread right after the menu
-	has handled the input (task.defer), never in the middle of a page change; errors are
-	warned.
-
-	Painters draw with Drawing primitives in local coordinates and must not yield:
-	  draw:rect(x, y, w, h, color, opacity?)  draw:outline(x, y, w, h, color, opacity?, px?)
-	  draw:line(x1, y1, x2, y2, color, opacity?, px?)  draw:triangle(x1, y1, ..., color, opacity?)
-	  draw:text(x, y, text, size?, color?, opacity?) -> width   draw:measure(text, size?)
-	  draw.width  draw.height  draw.time  draw.scale  draw.accent
-	A canvas clips to its row. Nothing the menu shows is a GUI object: the only GUI it
-	makes are fully invisible input catchers (click shields, an off-screen text box),
-	so the menu stays out of stream capture like every other Drawing overlay.
-
-	menu:notify(text, {title?, color?, duration?})  toast under the menu
-	menu:task(title, {total?, onStop?}) -> Task      progress card with a Stop button:
-	    :set({phase?, detail?, done?, total?}) :step(n?) :finish(message?, ok?)
-	    :isStopped() :Destroy()
-	menu:prompt(id, spec) / menu:hidePrompt(id)    key hints:
-	    spec {title?, lines?, keys = {{key = "E", text = "Place", callback?}}} (keys {} for none)
-	menu:status(id, text?, color?)                  segment on the watermark (nil removes it)
-	menu:open() :close() :toggle() :isOpen() :getPage(name)
-	menu:setKeys(action, keys) :getKeys(action) :resetKeys(action?) :setToggleKey(key?)
-	    keys {"Up", "Ctrl+M", Enum.KeyCode.W} (two at most); actions in CornyMenu.actions
-	menu:defer(fn)                                  run fn on the menu's frame loop
-	menu:Destroy()                                  unload: every page's cleanup runs
-	CornyMenu.newJanitor() -> Janitor               :give(item) :destroy()
-	CornyMenu.palette                               colors: text, subtext, good, bad, warn...
-	CornyMenu.actions                               {id, label, keys (defaults), ...} per action
-
-	Every key is the user's (Menu Settings > Controls, or menu:setKeys). Defaults:
-	RightShift opens and closes; Up / Down move, Enter selects, Left / Right change
-	values (Left backs out of other rows), Backspace goes back, PageUp / PageDown /
-	Home / End jump, hold LeftShift for fast slider steps, Delete clears a key row,
-	Escape cancels typing or rebinding. Mouse: hover, click, wheel, right click goes
-	back (each can be turned off). Call CornyMenu.get() while the script loads: the frame loop
-	it connects then keeps executor identity. After that every public method, Destroy
-	included, is safe from any thread: it only changes state, and the menu draws and
-	touches its GUI from that loop.
-
-	Types for a script's own annotations come with the loader block (region
-	CornyMenuTypes, source lib/cornymenu_types.luau): CornyMenuModule, CornyMenuObject,
-	CornyMenuPage, CornyMenuOption, CornyMenuTask, CornyMenuLayer, CornyMenuJanitor and
-	the data shapes CornyMenuItem, CornyMenuKey, CornyMenuPrompt, CornyMenuOpts,
-	CornyMenuDraw, CornyMenuPainter, CornyMenuMouse, CornyMenuOptions, CornyMenuNotify,
-	CornyMenuTaskOptions, CornyMenuTaskUpdate, CornyMenuAction, CornyMenuPalette.
-	Full guide: lib/cornymenu.md.
+	CornyMenu v6
 ]]
 --#region CornyMenuTypes (CornyMenu's public types, source: lib/cornymenu_types.luau)
 -- The shapes scripts pass to CornyMenu and the objects it hands back. The module
@@ -170,6 +89,8 @@ type CornyMenuOpts = {
 	stay: boolean?,
 	animate: boolean?,
 	onMouse: ((event: CornyMenuMouse, x: number, y: number, delta: number) -> ())?,
+	-- lists, v6 (a v5 module ignores it): the highlighted item, nil once none is
+	onHighlight: ((key: string?, item: CornyMenuItem?) -> ())?,
 }
 type CornyMenuOptions = { title: string?, subtitle: string? }
 type CornyMenuNotify = { title: string?, color: Color3?, duration: number? }
@@ -349,7 +270,7 @@ type CornyMenuModule = {
 --#endregion CornyMenuTypes
 
 local CornyMenu = (function()
-	local VERSION = 5
+	local VERSION = 6
 
 	-- ============ Services ============
 	local RunService = game:GetService("RunService")
@@ -888,6 +809,7 @@ local CornyMenu = (function()
 		emptyText: string,
 		query: string,
 		search: Option?,
+		onHighlight: ((key: string?, item: ListItem?) -> ())?,
 	}
 	type CanvasState = {
 		height: number,
@@ -1107,6 +1029,9 @@ local CornyMenu = (function()
 		dragWidth: number,
 		canvasDrag: Option?,
 		armed: Option?, -- the confirm button waiting for its second press
+		-- the list whose onHighlight heard last, and the key it heard (nil: no item)
+		highlightOwner: Option?,
+		highlightKey: string?,
 		editing: EditState?,
 		editCounter: number,
 		focusId: number,
@@ -3134,6 +3059,7 @@ local CornyMenu = (function()
 			emptyText = (opts and opts.emptyText) or "Nothing here",
 			query = "",
 			search = nil,
+			onHighlight = opts and opts.onHighlight,
 		}
 		option.callback = callback
 		if items then
@@ -4326,6 +4252,49 @@ local CornyMenu = (function()
 		self:_markDirty()
 	end
 
+	-- A list with opts.onHighlight hears which of its items the open menu highlights: the
+	-- item when that changes while its page is on screen, nil once no item is (the search
+	-- row or an empty list highlighted, the page left, the menu closed). Checked once a
+	-- frame, so keys, the mouse, a search and a refresh all count. A list whose row was
+	-- destroyed hears nothing more.
+	function Menu._watchHighlight(self: Menu): ()
+		local owner: Option? = nil
+		local key: string? = nil
+		local item: ListItem? = nil
+		if self.opened then
+			local page = self:_currentPage()
+			local listOwner = page.owner
+			local list = if listOwner then listOwner.list else nil
+			if listOwner and list and list.onHighlight and not listOwner.destroyed then
+				owner = listOwner
+				local option = ensureSelection(page)
+				local state = if option then option.choice else nil
+				if state then
+					key = state.item.key
+					item = state.item
+				end
+			end
+		end
+		local previous = self.highlightOwner
+		local heard = self.highlightKey
+		if previous and not rawequal(previous, owner) then
+			-- the list left behind hears nil (once: it may have heard nil already)
+			local list = previous.list
+			if heard ~= nil and list and not previous.destroyed then
+				spawnCallback(`{optionLabel(previous)} highlight`, list.onHighlight, nil, nil)
+			end
+			heard = nil
+		end
+		self.highlightOwner = owner
+		self.highlightKey = key
+		if owner and key ~= heard then
+			local list = owner.list
+			if list then
+				spawnCallback(`{optionLabel(owner)} highlight`, list.onHighlight, key, item)
+			end
+		end
+	end
+
 	-- ============ Menu: typing (hidden TextBox) ============
 	function Menu._beginEdit(self: Menu, option: Option, mode: EditMode): ()
 		local gui = self.gui
@@ -4990,6 +4959,7 @@ local CornyMenu = (function()
 			self.renderer.present(self.canvas)
 			self:_syncGui()
 		end
+		self:_watchHighlight()
 	end
 
 	-- The immediate renderer failed or never painted: switch to pooled Drawing objects
@@ -7137,6 +7107,8 @@ local CornyMenu = (function()
 		self.layers = {}
 		self.drawTarget = { originX = 0, originY = 0, clip = nil }
 		self.draw = newDraw(self)
+		self.highlightOwner = nil
+		self.highlightKey = nil
 		self.editCounter = 0
 		self.focusId = 0
 		self.capturedAt = 0
@@ -7254,6 +7226,8 @@ local CornyMenu = (function()
 			end
 		end
 		local menu = newMenu(options)
+		-- a new table for every new menu: loader blocks already shipped inside scripts keep
+		-- a download only when this entry changed during its get, so keep it this way
 		genv[Config.GENV_KEY] = { version = VERSION, menu = menu }
 		return menu
 	end
