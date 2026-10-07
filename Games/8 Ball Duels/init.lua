@@ -1,4 +1,5 @@
 --!strict
+
 type CornyMenuItem = { key: string, text: string, dim: boolean?, description: string? }
 type CornyMenuKey = { key: string, text: string, callback: (() -> ())? }
 -- keys is required (pass {} for none): the strict checker cannot type a list literal of
@@ -6417,7 +6418,10 @@ end
 	 would prevent me from production use."
 
 	 How a run works (until you press Stop), each step after a pause like a player's:
-	   1. In the menu: the venue (the "Venue" choice: the highest one unlocked and affordable on
+	   1. In the menu, once the game shows its venue list (from the home screen it opens the list
+	      with the 1v1 card, the way a tap does; while neither shows, the game is still loading,
+	      say after a server move, or between two screens, and it waits: a missing menu never
+	      stops the run): the venue (the "Venue" choice: the highest one unlocked and affordable on
 	      the game's venue picker, PoolVenueMenu Cards[i].Unlocked / Affordable, or the highest of
 	      the ones that also fill with computer players, or one you pick) is picked the way tapping
 	      it does (PoolVenueMenu.Choose, which fires the picker's Chosen event: the game checks
@@ -6448,6 +6452,10 @@ end
 	   - The server covers a player with an AFK bot only after a whole turn with no shot (aims
 	     only count with real input: PoolActivity) (PoolMatchSession IdleTurns, AfkTurnsBeforeCover
 	     1): it shoots every turn [dump].
+	   - After the game moves you to a match's server it shows its search screen as "Joining your
+	     match" until the match starts, or the home screen after 25 s (PoolMenuUIHandler
+	     showArrival); the venue list's cards are locked until your progress loads (the first
+	     venue is always unlocked once it has: PoolVenueMenu.SetProgress) [dump].
 	   - Venues unlock with 5 wins in the venue before (PoolConstants.VenueUnlockWins); Germany
 	     matches only real players (Matchmaking "RealOnline"), the others fill with computer
 	     players up to level 20 [dump]. ]]
@@ -6478,10 +6486,12 @@ local AutoFarmConfig = table.freeze({
 	JOIN_TRIES = 3, -- failed picks in a row before the run stops
 	MISS_RECHECK = 2, -- seconds before it looks for a game object it did not find again
 	LEAVE_TRIES = 5, -- presses of the result screen's leave button before the run stops
+	PRESS_WAIT = 1, -- seconds after pressing a menu card, or between looks at unloaded venues
 	-- the game's objects (Game.liveTable): keys only each one has (2026-10-05 dump)
 	VENUE_KEYS = table.freeze({ "ChosenBindable", "Cards", "PassBindable" }) :: { string }, -- PoolVenueMenu.new
 	SEARCH_KEYS = table.freeze({ "CancelBindable", "Cancelled", "Root" }) :: { string }, -- PoolSearchMenu.new
 	RESULT_KEYS = table.freeze({ "RematchButton", "ExitButton", "OutcomeSounds" }) :: { string }, -- PoolResultScreen.new
+	HOME_KEYS = table.freeze({ "OneOnOne", "WithFriends", "Carousel" }) :: { string }, -- PoolHomeMenu.new
 	IDLE_TEXT = "Press Start to join matches and play them for you",
 })
 
@@ -6499,7 +6509,7 @@ type AutoFarmState = {
 	refresh: () -> (), -- the Start / Stop buttons
 	running: boolean,
 	task: CornyMenuTask?, -- the progress card while it runs
-	phase: string, -- "" | "loading" | "menu" | "joining" | "queued" | "match" | "result" | "moving"
+	phase: string, -- "" | "loading" | "waiting" | "home" | "menu" | "joining" | "queued" | "match" | "result" | "moving"
 	waitUntil: number, -- the pause before its next step
 	turnReadyAt: number?, -- your turn began: the pause before it starts on the shot
 	joinedAt: number,
@@ -6677,10 +6687,15 @@ end
 
 -- Presses the result screen's leave button (its Activated event, as a click)
 function AutoFarm.leave(state: AutoFarmState, screen: any): ()
-	local button: any = screen.ExitButton -- a GuiButton of the game's
+	AutoFarm.press(state, screen.ExitButton, "the result screen's leave button")
+end
+
+-- Presses one of the game's buttons the way a click does (its Activated event): Volt's
+-- firesignal, else each of its connections. `what` names it for F9
+function AutoFarm.press(state: AutoFarmState, button: any, what: string): ()
 	local isButton = typeof(button) == "Instance"
 	if not isButton then
-		AutoFarm.warnOnce(state, "the result screen has no leave button")
+		AutoFarm.warnOnce(state, `{what} is not there`)
 		return
 	end
 	local fire: any = firesignal -- Volt: fires the Luau connections of a signal
@@ -6697,7 +6712,21 @@ function AutoFarm.leave(state: AutoFarmState, screen: any): ()
 			return
 		end
 	end
-	AutoFarm.warnOnce(state, "could not press the result screen's leave button")
+	AutoFarm.warnOnce(state, `could not press {what}`)
+end
+
+-- Whether the venue list's cards are filled in: the game marks them once your progress and
+-- coins load (the first venue is then unlocked and, free to enter, affordable)
+function AutoFarm.venuesLoaded(menuObject: any): boolean
+	if type(menuObject) ~= "table" or type(menuObject.Cards) ~= "table" then
+		return false
+	end
+	for _, card in menuObject.Cards do
+		if type(card) == "table" and card.Unlocked == true and card.Affordable == true then
+			return true
+		end
+	end
+	return false
 end
 
 -- Cancels the search for an opponent the way its Cancel does (the search screen's
@@ -6853,7 +6882,33 @@ function AutoFarm.tick(state: AutoFarmState): ()
 		end
 	end
 
-	-- the menu: pick the venue, after a pause
+	-- the menu: the venue list on screen, or the home screen (its 1v1 card opens the list);
+	-- anything else (the game still loading, say after a server move, or a screen between two
+	-- others) is waited out, never a reason to stop
+	local menuObject = AutoFarm.object(state, "venueMenu", AutoFarmConfig.VENUE_KEYS)
+	if menuObject == nil or not Shots.isOnScreen(menuObject.Root) then
+		local home = AutoFarm.object(state, "homeMenu", AutoFarmConfig.HOME_KEYS)
+		if home ~= nil and Shots.isOnScreen(home.Root) then
+			if state.phase ~= "home" then
+				AutoFarm.enter(state, "home")
+				state.waitUntil = now
+					+ AutoFarm.between(state, AutoFarmConfig.MENU_MIN, AutoFarmConfig.MENU_MAX)
+				AutoFarm.show(state, "Opening the venues")
+				return
+			end
+			-- like a tap on the 1v1 card (a first tap may only bring the card to the middle)
+			AutoFarm.press(state, home.OneOnOne, "the home screen's 1v1 card")
+			state.waitUntil = now + AutoFarmConfig.PRESS_WAIT
+			return
+		end
+		if state.phase ~= "waiting" then
+			AutoFarm.enter(state, "waiting")
+			AutoFarm.show(state, "Waiting for the game")
+		end
+		return
+	end
+
+	-- the venue list: pick the venue, after a pause
 	if state.phase ~= "menu" then
 		AutoFarm.enter(state, "menu")
 		state.waitUntil = now
@@ -6861,11 +6916,16 @@ function AutoFarm.tick(state: AutoFarmState): ()
 		AutoFarm.show(state, "Choosing a match")
 		return
 	end
-	local menuObject = AutoFarm.object(state, "venueMenu", AutoFarmConfig.VENUE_KEYS)
-	local title: any = if type(menuObject) == "table" then menuObject.TitleLabel else nil
+	local title: any = menuObject.TitleLabel
 	local isLabel = typeof(title) == "Instance"
 	if isLabel and string.find(string.upper(tostring(title.Text)), "CHALLENGE", 1, true) == 1 then
 		AutoFarm.stop(state, "A friend challenge is waiting - close it, then press Start", false)
+		return
+	end
+	if not AutoFarm.venuesLoaded(menuObject) then
+		-- your progress and coins are still loading: the cards are all locked until then
+		AutoFarm.show(state, "Waiting for your venues")
+		state.waitUntil = now + AutoFarmConfig.PRESS_WAIT
 		return
 	end
 	local index, name, problem = AutoFarm.pickVenue(menuObject, state.saved.venue)
@@ -7271,7 +7331,15 @@ function AutoFarm.describeState(state: AutoFarmState): { string }
 	table.insert(lines, `moving to another server: {Relaunch.isTeleporting()}`)
 	table.insert(lines, `runs again after a teleport from: {GameConfig.SCRIPT_URL}`)
 	local menuObject = AutoFarm.object(state, "venueMenu", AutoFarmConfig.VENUE_KEYS)
-	table.insert(lines, `venue picker found: {menuObject ~= nil}`)
+	local home = AutoFarm.object(state, "homeMenu", AutoFarmConfig.HOME_KEYS)
+	local pickerShown = menuObject ~= nil and Shots.isOnScreen(menuObject.Root)
+	local homeShown = home ~= nil and Shots.isOnScreen(home.Root)
+	local loaded = AutoFarm.venuesLoaded(menuObject)
+	table.insert(
+		lines,
+		`venue picker found: {menuObject ~= nil}, on screen: {pickerShown}, cards loaded: {loaded}`
+	)
+	table.insert(lines, `home screen found: {home ~= nil}, on screen: {homeShown}`)
 	if menuObject ~= nil and type(menuObject.Cards) == "table" then
 		for index, card in menuObject.Cards do
 			local venue = if type(card) == "table" then card.Venue else nil
